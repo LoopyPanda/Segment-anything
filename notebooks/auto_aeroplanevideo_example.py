@@ -186,11 +186,12 @@ def create_video_mask_annotation(frames, instance):
 
 unique_identifier = str(uuid.uuid4())[:8]
 # global_key = f"{os.path.basename('video/skateboarding')}_{unique_identifier}"
-global_key = f"{os.path.basename('video/aeroplane')}_{unique_identifier}"
+#global_key = f"{os.path.basename('video/aeroplane')}_{unique_identifier}"
+global_key = f"{os.path.basename('video/Highway')}_{unique_identifier}"
 
 asset = {
-    #"row_data": 'https://storage.googleapis.com/labelbox-datasets/image_sample_data/skateboarding.mp4',
-    "row_data": 'video/aeroplane.mp4',
+    #"row_data": 'video/aeroplane.mp4',
+    "row_data": 'video/Highway.mp4',
     # "row_data": 'video/skateboarding.mp4',
     "global_key": global_key,
     "media_type": "VIDEO"
@@ -207,7 +208,8 @@ print(f"Failed data rows: {task.failed_data_rows}")
 start_time = time.time()
 
 #Run YOLOv8 and SAM per-frame
-cap = cv2.VideoCapture('video/aeroplane.mp4')
+#cap = cv2.VideoCapture('video/aeroplane.mp4')
+cap = cv2.VideoCapture('video/Highway.mp4')
 # cap = cv2.VideoCapture('video/skateboarding.mp4')
 
 # This will contain the resulting mask predictions for upload to Labelbox
@@ -240,13 +242,14 @@ unique_class_ids
 # Run YOLOv8 and then SAM on each frame, and write visualization videos to disk
 # You can download /content/skateboarding_boxes.mp4 and /content/skateboarding_masks.mp4
 # to visualize the results
-cap = cv2.VideoCapture('video/aeroplane.mp4')
+#cap = cv2.VideoCapture('video/aeroplane.mp4')
 # cap = cv2.VideoCapture('video/skateboarding.mp4')
+cap = cv2.VideoCapture('video/Highway.mp4')
 
 # output_video_boxes = get_output_video_writer(cap, "content/skateboarding_boxes.mp4")
 # output_video_masks = get_output_video_writer(cap, "content/skateboarding_masks.mp4")
-output_video_boxes = get_output_video_writer(cap, "auto_content2/aeroplane_boxes.mp4")
-output_video_masks = get_output_video_writer(cap, "auto_content2/aeroplane_masks.mp4")
+output_video_boxes = get_output_video_writer(cap, "auto_content3/Highway_boxes.mp4")
+output_video_masks = get_output_video_writer(cap, "auto_content3/Highway_masks.mp4")
 mask_frames = []
 
 # Loop through the frames of the video
