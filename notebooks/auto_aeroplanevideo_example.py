@@ -1,6 +1,5 @@
 import os
 from io import BytesIO
-
 import PIL
 import matplotlib.pyplot as plt
 HOME = os.getcwd()
@@ -90,8 +89,13 @@ def visualize_detections(frame, boxes, conf_thresholds, class_ids):
         class_id = int(class_ids[idx])
         conf = float(conf_thresholds[idx])
         x1, y1, x2, y2 = int(boxes[idx][0]), int(boxes[idx][1]), int(boxes[idx][2]), int(boxes[idx][3])
-        color = colors[class_id]
-        label = f"{model.names[class_id]}: {conf:.2f}"
+        if class_id in chosen_class_ids:
+            color = colors[class_id]
+            label = f"{model.names[class_id]}: {conf:.2f}"
+        else:
+            # If the class is not in chosen_class_ids, set it to 'unknown'
+            color = (0, 0, 0)  # Black color for 'unknown' class
+            label = f"Unknown: {conf:.2f}"
         cv2.rectangle(frame_copy, (x1, y1), (x2, y2), get_color(color), 2)
         cv2.putText(frame_copy, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, get_color(color), 2)
     return frame_copy
@@ -188,11 +192,14 @@ unique_identifier = str(uuid.uuid4())[:8]
 # global_key = f"{os.path.basename('video/skateboarding')}_{unique_identifier}"
 #global_key = f"{os.path.basename('video/aeroplane')}_{unique_identifier}"
 global_key = f"{os.path.basename('video/Highway')}_{unique_identifier}"
+#global_key = f"{os.path.basename('video/House_objects')}_{unique_identifier}"
+
 
 asset = {
     #"row_data": 'video/aeroplane.mp4',
     "row_data": 'video/Highway.mp4',
     # "row_data": 'video/skateboarding.mp4',
+    #"row_data": 'video/House_objects.mp4',
     "global_key": global_key,
     "media_type": "VIDEO"
 }
@@ -210,7 +217,9 @@ start_time = time.time()
 #Run YOLOv8 and SAM per-frame
 #cap = cv2.VideoCapture('video/aeroplane.mp4')
 cap = cv2.VideoCapture('video/Highway.mp4')
-# cap = cv2.VideoCapture('video/skateboarding.mp4')
+#cap = cv2.VideoCapture('video/skateboarding.mp4')
+#cap = cv2.VideoCapture('video/House_objects.mp4')
+
 
 # This will contain the resulting mask predictions for upload to Labelbox
 unique_class_ids = set()
@@ -245,41 +254,58 @@ unique_class_ids
 #cap = cv2.VideoCapture('video/aeroplane.mp4')
 # cap = cv2.VideoCapture('video/skateboarding.mp4')
 cap = cv2.VideoCapture('video/Highway.mp4')
+#cap = cv2.VideoCapture('video/House_objects.mp4')
+
 
 # output_video_boxes = get_output_video_writer(cap, "content/skateboarding_boxes.mp4")
 # output_video_masks = get_output_video_writer(cap, "content/skateboarding_masks.mp4")
-output_video_boxes = get_output_video_writer(cap, "auto_content3/Highway_boxes.mp4")
-output_video_masks = get_output_video_writer(cap, "auto_content3/Highway_masks.mp4")
+# output_video_boxes = get_output_video_writer(cap, "auto_content3/Highway_boxes.mp4")
+# output_video_masks = get_output_video_writer(cap, "auto_content3/Highway_masks.mp4")
+output_video = get_output_video_writer(cap, "auto_content4/Highway_output.mp4")
+#output_video = get_output_video_writer(cap, "auto_content5/House_objects.mp4")
+
+
 mask_frames = []
 
 # Loop through the frames of the video
 frame_num = 1
+
 while cap.isOpened():
     if frame_num % 30 == 0 or frame_num == 1:
         print("Processing frames", frame_num, "-", frame_num + 29)
-    ret, frame = cap.read()
-    if not ret:
+        # Read frames from both videos
+    ret_boxes, frame_boxes = cap.read()
+    ret_masks, frame_masks = cap.read()
+
+    # Break the loop if any of the videos end
+    if not ret_boxes or not ret_masks:
         break
+    # ret, frame = cap.read()
+    #if not ret:
+    #    break
     # print("Maximum frames are:", mask_frames)
 
     # Run frame through YOLOv8 to get detections
-    detections = model.predict(frame, conf=0.7)  # frame is a numpy array
+    detections = model.predict(frame_boxes, conf=0.7)  # frame is a numpy array
+
 
     # Write detections to output video
-    frame_with_detections = visualize_detections(frame,
+    frame_with_detections = visualize_detections(frame_boxes,
                                                  detections[0].boxes.cpu().xyxy,
                                                  detections[0].boxes.cpu().conf,
                                                  detections[0].boxes.cpu().cls)
-    output_video_boxes.write(frame_with_detections)
+    #output_video_boxes.write(frame_with_detections)
+    output_video.write(frame_with_detections)
 
     # Run frame and detections through SAM to get masks
     transformed_boxes = mask_predictor.transform.apply_boxes_torch(detections[0].boxes.xyxy,list(get_video_dimensions(cap)))
     if len(transformed_boxes) == 0:
         print("No boxes found on frame", frame_num)
-        output_video_masks.write(frame)
+        #output_video_masks.write(frame)
+        output_video.write(frame)
         frame_num += 1
         continue
-    mask_predictor.set_image(frame)
+    mask_predictor.set_image(frame_boxes)
 
     masks, scores, logits = mask_predictor.predict_torch(
         boxes=transformed_boxes,
@@ -290,14 +316,26 @@ while cap.isOpened():
     masks = np.array(masks.cpu())
     if masks is None or len(masks) == 0:
         print("No masks found on frame", frame_num)
-        output_video_masks.write(frame)
+        #output_video_masks.write(frame)
+        output_video.write(frame)
         frame_num += 1
         continue
     merged_colored_mask = merge_masks_colored(masks, detections[0].boxes.cls)
 
-    # Write masks to output video
-    image_combined = cv2.addWeighted(frame, 0.7, merged_colored_mask, 0.7, 0)
-    output_video_masks.write(image_combined)
+    # Combine the frames
+    #combined_frame = np.vstack((frame_boxes, frame_masks))
+
+    # Save images which contain both boxes and masks
+    #cv2.imwrite(f'images/Highway_frames/combined_frame_{frame_num}.jpg', combined_frame)
+
+    # Output_video_masks.write(image_combined)
+    image_with_automask = cv2.addWeighted(frame_with_detections, 0.7, merged_colored_mask, 0.7, 0)
+    cv2.imwrite(f'images/Highway_frames/image_with_automask{frame_num}.jpg', image_with_automask)
+    #cv2.imwrite(f'images/House_objects/image_with_automask{frame_num}.jpg', image_with_automask)
+    output_video.write(image_with_automask)
+
+    # Write the combined frame to the output video
+    #output_video.write(combined_frame)
 
     # Create video mask annotation for upload to Labelbox
     instance_uri = get_instance_uri(client, global_key, merged_colored_mask)
@@ -306,13 +344,16 @@ while cap.isOpened():
 
     frame_num += 1
 
-    # For the purposes of the airplane video, only look at the first 30 frames
+    # For the purposes of the airplane video, only look at the first 60 frames,
+    # so that we get 2 seconds of video output
     if frame_num > 60:
-       break
+      break
+
 
 cap.release()
-output_video_boxes.release()
-output_video_masks.release()
+# output_video_boxes.release()
+# output_video_masks.release()
+output_video.release()
 cv2.destroyAllWindows()
 
 # End timer
